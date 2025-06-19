@@ -17,11 +17,15 @@ def main(args):
     print_environ()
     print(s)
     
-    # Data verification before training
+    # Data verification before training - FIXED
     print("Verifying data shapes and ranges:")
-    for i, batch in enumerate(get_act_dataloader(args)[0]):
-        data, labels, _ = batch
-        print(f"Batch {i}: Data shape={data.shape}, Min={data.min():.4f}, Max={data.max():.4f}")
+    train_loader, _, _, _, _, _, _ = get_act_dataloader(args)
+    for i, batch in enumerate(train_loader):
+        # Handle variable batch size
+        inputs = batch[0]
+        labels = batch[1]
+        
+        print(f"Batch {i}: Data shape={inputs.shape}, Min={inputs.min():.4f}, Max={inputs.max():.4f}")
         print(f"Labels: {torch.unique(labels, return_counts=True)}")
         if i == 2:  # Check first 3 batches
             break

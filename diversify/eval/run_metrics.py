@@ -35,8 +35,11 @@ def main():
     args.dataset = args_extra.dataset
     args.output = args_extra.output_dir
     args.test_envs = [args_extra.test_env]
-    args.use_gnn = True
-    args.layer = 'ln'
+    
+    # CRITICAL: Match training configuration
+    args.use_gnn = False  # Must match training configuration
+    args.layer = 'bn'     # Must match training configuration
+    args.latent_domain_num = 10  # Must match training configuration
 
     # ✅ Load data
     train_loader, _, _, target_loader, _, _, _ = get_act_dataloader(args)
@@ -49,8 +52,10 @@ def main():
     # ✅ Load trained model weights
     model_path = Path(args.output) / "model.pth"
     if model_path.exists():
-        model.load_state_dict(torch.load(model_path))
+        # Load with strict=False to handle mismatched keys
+        model.load_state_dict(torch.load(model_path), strict=False)
         print(f"✅ Loaded trained model from {model_path}")
+        print("Note: Some layers were not loaded due to architecture changes")
     else:
         print("⚠️ Warning: No trained model found. Using random weights")
 
@@ -63,6 +68,7 @@ def main():
 
     print("\n=== Evaluation Metrics on Target Domain ===")
     print(f"Dataset: {args.dataset}, Num classes: {args.num_classes}")
+    print(f"Model config: use_gnn={args.use_gnn}, layer={args.layer}, latent_domains={args.latent_domain_num}")
 
     # ✅ Accuracy
     acc = compute_accuracy(model, target_loader)

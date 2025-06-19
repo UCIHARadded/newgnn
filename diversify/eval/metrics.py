@@ -4,7 +4,7 @@ from sklearn.metrics import silhouette_score, davies_bouldin_score
 import matplotlib.pyplot as plt
 import os
 
-def extract_features_labels(model, loader):
+def extract_features_labels(model, loader, use_bottleneck=True):
     features = []
     labels = []
     model.eval()
@@ -32,7 +32,16 @@ def extract_features_labels(model, loader):
                 continue
                 
             data = data.cuda()
-            feat = model.featurizer(data)
+            
+            # Extract appropriate features
+            if use_bottleneck:
+                # Pass through featurizer and bottleneck
+                feat = model.featurizer(data)
+                feat = model.bottleneck(feat)  # Added bottleneck layer
+            else:
+                # Use only featurizer output
+                feat = model.featurizer(data)
+                
             features.append(feat.cpu().numpy())
             labels.append(label.cpu().numpy())
             
@@ -86,7 +95,9 @@ def compute_silhouette(features, labels):
         return 0.0
     
     # Silhouette score requires at least 2 samples per class
-    min_class_size = min(np.bincount(labels.astype(int)))
+    class_counts = np.bincount(labels.astype(int))
+    min_class_size = np.min(class_counts) if len(class_counts) > 0 else 0
+    
     if min_class_size < 2:
         return 0.0
     
@@ -114,7 +125,9 @@ def compute_davies_bouldin(features, labels):
         return 0.0
     
     # Davies-Bouldin requires at least 2 samples per class
-    min_class_size = min(np.bincount(labels.astype(int)))
+    class_counts = np.bincount(labels.astype(int))
+    min_class_size = np.min(class_counts) if len(class_counts) > 0 else 0
+    
     if min_class_size < 2:
         return 0.0
     

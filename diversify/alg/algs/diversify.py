@@ -48,14 +48,10 @@ class Diversify(Algorithm):
         disc_out1 = self.ddiscriminator(disc_in1)
         disc_loss = F.cross_entropy(disc_out1, all_d1, reduction='mean')
         
-        # Add class weights to classification loss
+        # FIXED: Remove class weights for latent domain classification
         cd1 = self.dclassifier(z1)
-        if self.class_weights is not None:
-            ent_loss = Entropylogits(cd1)*self.args.lam + \
-                F.cross_entropy(cd1, all_c1, weight=self.class_weights)
-        else:
-            ent_loss = Entropylogits(cd1)*self.args.lam + \
-                F.cross_entropy(cd1, all_c1)
+        ent_loss = Entropylogits(cd1)*self.args.lam + \
+            F.cross_entropy(cd1, all_c1)
                 
         # Add L2 regularization
         l2_lambda = 0.001
@@ -136,7 +132,7 @@ class Diversify(Algorithm):
 
         disc_loss = F.cross_entropy(disc_out, disc_labels)
         
-        # Add class weights to classification loss
+        # Keep class weights for activity classification
         all_preds = self.classifier(all_z)
         if self.class_weights is not None:
             classifier_loss = F.cross_entropy(all_preds, all_y, weight=self.class_weights)

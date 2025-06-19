@@ -1,14 +1,9 @@
 import torch
 import numpy as np
 from sklearn.metrics import silhouette_score, davies_bouldin_score
-from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
-from sklearn.manifold import TSNE
-import umap
 import os
 import torch.nn as nn
-
-# Removed the fixed path loading
 
 def extract_features_labels(model, loader):
     features = []

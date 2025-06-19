@@ -125,30 +125,38 @@ def main():
     acc = compute_accuracy(model, target_loader)
     print("\nTest Accuracy (OOD):", acc)
 
-    # ✅ Feature extraction (on limited batches)
-    MAX_BATCHES_FOR_FEATURES = 50
-    try:
-        train_feats, train_labels = extract_features_labels(model, limit_batches(train_loader, MAX_BATCHES_FOR_FEATURES))
-        target_feats, target_labels = extract_features_labels(model, limit_batches(target_loader, MAX_BATCHES_FOR_FEATURES))
 
-        print(f"\nExtracted {len(train_labels)} train samples and {len(target_labels)} target samples for metrics")
-        
-        # Silhouette Score
-        sil_score = compute_silhouette(train_feats, train_labels)
-        print("Silhouette Score:", sil_score)
-        
-        # Davies-Bouldin Score
-        db_score = compute_davies_bouldin(train_feats, train_labels)
-        print("Davies-Bouldin Score:", db_score)
-        
-        # H-divergence
-        if len(train_feats) > 0 and len(target_feats) > 0:
-            h_div = compute_h_divergence(train_feats, target_feats, model.discriminator)
-            print("H-divergence:", h_div)
-        else:
-            print("⚠️ Skipping H-divergence due to insufficient data")
-    except Exception as e:
-        print(f"⚠️ Feature metric computation failed: {e}")
+# ✅ Feature extraction (on limited batches)
+MAX_BATCHES_FOR_FEATURES = 50
+try:
+    # For cluster metrics, use raw features
+    train_feats_raw, train_labels = extract_features_labels(model, limit_batches(train_loader, MAX_BATCHES_FOR_FEATURES), use_bottleneck=False)
+    target_feats_raw, target_labels = extract_features_labels(model, limit_batches(target_loader, MAX_BATCHES_FOR_FEATURES), use_bottleneck=False)
+
+    # For H-divergence, use bottleneck features
+    train_feats_bn, _ = extract_features_labels(model, limit_batches(train_loader, MAX_BATCHES_FOR_FEATURES), use_bottleneck=True)
+    target_feats_bn, _ = extract_features_labels(model, limit_batches(target_loader, MAX_BATCHES_FOR_FEATURES), use_bottleneck=True)
+
+    print(f"\nExtracted {len(train_labels)} train samples and {len(target_labels)} target samples for metrics")
+    
+    # Silhouette Score
+    sil_score = compute_silhouette(train_feats_raw, train_labels)
+    print("Silhouette Score:", sil_score)
+    
+    # Davies-Bouldin Score
+    db_score = compute_davies_bouldin(train_feats_raw, train_labels)
+    print("Davies-Bouldin Score:", db_score)
+    
+    # H-divergence
+    if len(train_feats_bn) > 0 and len(target_feats_bn) > 0:
+        h_div = compute_h_divergence(train_feats_bn, target_feats_bn, model.discriminator)
+        print("H-divergence:", h_div)
+    else:
+        print("⚠️ Skipping H-divergence due to insufficient data")
+except Exception as e:
+    print(f"⚠️ Feature metric computation failed: {e}")
+
+
 
     # ✅ Plot training curve
     if history:

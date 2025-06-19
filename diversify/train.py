@@ -21,7 +21,6 @@ def main(args):
     print("Verifying data shapes and ranges:")
     train_loader, _, _, _, _, _, _ = get_act_dataloader(args)
     for i, batch in enumerate(train_loader):
-        # Handle variable batch size
         inputs = batch[0]
         labels = batch[1]
         
@@ -37,10 +36,13 @@ def main(args):
 
     train_loader, train_loader_noshuffle, valid_loader, target_loader, _, _, _ = get_act_dataloader(args)
 
-    # Calculate class weights
+    # Calculate class weights - FIXED TYPE CONVERSION
     all_labels = []
     for batch in train_loader:
-        all_labels.append(batch[1])
+        # Convert labels to integers
+        int_labels = batch[1].to(torch.long)
+        all_labels.append(int_labels)
+        
     all_labels = torch.cat(all_labels, dim=0)
     class_counts = np.bincount(all_labels.numpy())
     class_weights = 1.0 / torch.tensor(class_counts, dtype=torch.float32)

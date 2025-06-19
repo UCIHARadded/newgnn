@@ -6,6 +6,7 @@ import argparse
 from pathlib import Path
 import torch
 import pickle
+import numpy as np
 
 # ✅ Imports
 from utils.util import get_args
@@ -25,7 +26,11 @@ def main():
 
     # ✅ Core Args
     args = get_args()
-    args.num_classes = 36  # ✅ Full EMG label space
+    # FIX: Set num_classes based on dataset
+    if args_extra.dataset == 'emg':
+        args.num_classes = 6  # EMG has 6 classes
+    else:
+        args.num_classes = 36  # For other datasets
     args.data_dir = './data/'
     args.dataset = args_extra.dataset
     args.output = args_extra.output_dir
@@ -40,6 +45,14 @@ def main():
     algorithm_class = alg.get_algorithm_class(args.algorithm)
     model = algorithm_class(args).cuda()
     model.eval()
+    
+    # ✅ Load trained model weights
+    model_path = Path(args.output) / "model.pth"
+    if model_path.exists():
+        model.load_state_dict(torch.load(model_path))
+        print(f"✅ Loaded trained model from {model_path}")
+    else:
+        print("⚠️ Warning: No trained model found. Using random weights")
 
     # ✅ History
     history_path = Path(args.output) / "training_history.pkl"
@@ -49,6 +62,7 @@ def main():
             history = pickle.load(f)
 
     print("\n=== Evaluation Metrics on Target Domain ===")
+    print(f"Dataset: {args.dataset}, Num classes: {args.num_classes}")
 
     # ✅ Accuracy
     acc = compute_accuracy(model, target_loader)
@@ -56,6 +70,13 @@ def main():
 
     # ✅ Feature extraction
     try:
+        # Debug: Check label ranges
+        _, sample_labels = next(iter(target_loader))
+        unique_labels = torch.unique(sample_labels)
+        print(f"Unique labels in target: {unique_labels}")
+        print(f"Label range: {unique_labels.min().item()} to {unique_labels.max().item()}")
+        assert unique_labels.max() < args.num_classes, "Labels exceed class dimension!"
+        
         train_feats, train_labels = extract_features_labels(model, train_loader)
         target_feats, target_labels = extract_features_labels(model, target_loader)
 

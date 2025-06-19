@@ -3,14 +3,21 @@ import numpy as np
 from sklearn.metrics import silhouette_score, davies_bouldin_score
 import matplotlib.pyplot as plt
 import os
-import torch.nn as nn
 
 def extract_features_labels(model, loader):
     features = []
     labels = []
     model.eval()
     with torch.no_grad():
-        for data, label in loader:
+        for batch in loader:
+            # Handle both 2-item and 3-item returns
+            if len(batch) == 3:
+                data, label, _ = batch
+            elif len(batch) == 2:
+                data, label = batch
+            else:
+                raise ValueError(f"Unexpected number of items in batch: {len(batch)}")
+                
             data = data.cuda()
             feat = model.featurizer(data)
             features.append(feat.cpu().numpy())
@@ -24,7 +31,15 @@ def compute_accuracy(model, loader):
     correct = 0
     total = 0
     with torch.no_grad():
-        for data, labels in loader:
+        for batch in loader:
+            # Handle both 2-item and 3-item returns
+            if len(batch) == 3:
+                data, labels, _ = batch
+            elif len(batch) == 2:
+                data, labels = batch
+            else:
+                raise ValueError(f"Unexpected number of items in batch: {len(batch)}")
+                
             data, labels = data.cuda(), labels.cuda()
             outputs = model.predict(data)
             _, predicted = torch.max(outputs.data, 1)
@@ -33,7 +48,6 @@ def compute_accuracy(model, loader):
     return correct / total
 
 def compute_silhouette(features, labels):
-    # Use a subset if the dataset is too large
     if len(features) > 5000:
         indices = np.random.choice(len(features), 5000, replace=False)
         features = features[indices]

@@ -65,7 +65,7 @@ def analyze_predictions(model, loader, name, max_batches=10):
     return pred_counter
 
 def main():
-    # Create a new parser just for this script
+    # Create a parser for evaluation-specific arguments
     parser = argparse.ArgumentParser()
     parser.add_argument('--output_dir', type=str, required=True,
                         help='Path to the training output directory')
@@ -74,8 +74,8 @@ def main():
     parser.add_argument('--dataset', type=str, default='emg',
                         help='Dataset name (default: emg)')
     
-    # Parse only the known arguments
-    args_extra, unknown = parser.parse_known_args()
+    # Parse evaluation arguments
+    args_extra = parser.parse_args()
     
     # Initialize variables
     model = None
@@ -84,10 +84,10 @@ def main():
     train_loader = None
 
     try:
-        # Core Args - use get_args without parsing command line
-        args = get_args([])  # Pass empty list to avoid parsing sys.argv
+        # Get base arguments without parsing command line
+        args = get_args()
         
-        # FIX: Set num_classes based on dataset
+        # Override specific arguments for evaluation
         if args_extra.dataset == 'emg':
             args.num_classes = 6
         else:

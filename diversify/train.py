@@ -16,11 +16,14 @@ from alg import alg, modelopera
 from utils.util import set_random_seed, get_args, print_row, print_args, train_valid_target_eval_names, alg_loss_dict, print_environ
 from datautil.getdataloader_single import get_act_dataloader
 
-
 def main(args):
     s = print_args(args, [])
     set_random_seed(args.seed)
-    args.num_classes = 36
+    # FIX: Set num_classes based on dataset
+    if args.dataset == 'emg':
+        args.num_classes = 6  # EMG has 6 classes
+    else:
+        args.num_classes = 36  # For other datasets
     print_environ()
     print(s)
     if args.latent_domain_num < 6:
@@ -100,6 +103,10 @@ def main(args):
             results['total_cost_time'] = time.time()-sss
             print_row([results[key] for key in print_key], colwidth=15)
 
+    # ✅ Save trained model
+    model_path = Path(args.output) / "model.pth"
+    torch.save(algorithm.state_dict(), model_path)
+    print(f"✅ Saved trained model to {model_path}")
     print(f'Target acc: {target_acc:.4f}')
 
 

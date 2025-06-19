@@ -80,7 +80,14 @@ def compute_silhouette(features, labels):
     
     # Check for sufficient classes
     unique_labels = np.unique(labels)
-    if len(unique_labels) < 2:
+    n_classes = len(unique_labels)
+    
+    if n_classes < 2:
+        return 0.0
+    
+    # Silhouette score requires at least 2 samples per class
+    min_class_size = min(np.bincount(labels.astype(int)))
+    if min_class_size < 2:
         return 0.0
     
     # Limit sample size
@@ -89,7 +96,11 @@ def compute_silhouette(features, labels):
         features = features[indices]
         labels = labels[indices]
     
-    return silhouette_score(features, labels)
+    try:
+        return silhouette_score(features, labels)
+    except Exception as e:
+        print(f"⚠️ Silhouette score failed: {str(e)}")
+        return 0.0
 
 def compute_davies_bouldin(features, labels):
     if len(features) == 0 or len(labels) == 0:
@@ -97,7 +108,14 @@ def compute_davies_bouldin(features, labels):
     
     # Check for sufficient classes
     unique_labels = np.unique(labels)
-    if len(unique_labels) < 2:
+    n_classes = len(unique_labels)
+    
+    if n_classes < 2:
+        return 0.0
+    
+    # Davies-Bouldin requires at least 2 samples per class
+    min_class_size = min(np.bincount(labels.astype(int)))
+    if min_class_size < 2:
         return 0.0
     
     # Limit sample size
@@ -106,7 +124,11 @@ def compute_davies_bouldin(features, labels):
         features = features[indices]
         labels = labels[indices]
     
-    return davies_bouldin_score(features, labels)
+    try:
+        return davies_bouldin_score(features, labels)
+    except Exception as e:
+        print(f"⚠️ Davies-Bouldin score failed: {str(e)}")
+        return 0.0
 
 def compute_h_divergence(features1, features2, discriminator):
     if len(features1) == 0 or len(features2) == 0:

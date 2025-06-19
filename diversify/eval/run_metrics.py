@@ -1,15 +1,17 @@
 import sys
 import os
-sys.path.append(os.path.abspath("."))  # Make sure ./eval etc. are importable
-
 import argparse
 from pathlib import Path
 import torch
 import pickle
 import numpy as np
 import collections
+import traceback
 
-# ✅ Imports
+# Make sure ./eval etc. are importable
+sys.path.append(os.path.abspath("."))
+
+# Imports
 from utils.util import get_args
 from datautil.getdataloader_single import get_act_dataloader
 from alg import alg
@@ -28,10 +30,9 @@ def limit_batches(loader, max_batches):
             break
 
 def analyze_distribution(loader, name, max_batches=10):
-    """Analyze label and prediction distribution"""
+    """Analyze label distribution"""
     print(f"\n=== {name} Distribution Analysis ===")
     
-    # Label distribution
     label_counter = collections.Counter()
     for batch in limit_batches(loader, max_batches):
         if isinstance(batch, (list, tuple)) and len(batch) > 1:
@@ -48,7 +49,6 @@ def analyze_predictions(model, loader, name, max_batches=10):
     """Analyze model prediction distribution"""
     print(f"\n=== {name} Prediction Analysis ===")
     
-    # Prediction distribution
     pred_counter = collections.Counter()
     model.eval()
     with torch.no_grad():
@@ -71,97 +71,106 @@ def main():
     parser.add_argument('--dataset', type=str, default='emg')
     args_extra = parser.parse_args()
 
-    # ✅ Core Args
-    args = get_args()
-    # FIX: Set num_classes based on dataset
-    if args_extra.dataset == 'emg':
-        args.num_classes = 6  # EMG has 6 classes
-    else:
-        args.num_classes = 36  # For other datasets
-    args.data_dir = './data/'
-    args.dataset = args_extra.dataset
-    args.output = args_extra.output_dir
-    args.test_envs = [args_extra.test_env]
-    
-    # CRITICAL: Match training configuration
-    args.use_gnn = False  # Must match training configuration
-    args.layer = 'bn'     # Must match training configuration
-    args.latent_domain_num = 10  # Must match training configuration
-
-    # ✅ Load data
-    train_loader, _, _, target_loader, _, _, _ = get_act_dataloader(args)
-
-    # ✅ Model
-    algorithm_class = alg.get_algorithm_class(args.algorithm)
-    model = algorithm_class(args).cuda()
-    model.eval()
-    
-    # ✅ Load trained model weights
-    model_path = Path(args.output) / "model.pth"
-    if model_path.exists():
-        # Load with strict=False to handle mismatched keys
-        model.load_state_dict(torch.load(model_path), strict=False)
-        print(f"✅ Loaded trained model from {model_path}")
-        print("Note: Some layers were not loaded due to architecture changes")
-    else:
-        print("⚠️ Warning: No trained model found. Using random weights")
-
-    # ✅ History
-    history_path = Path(args.output) / "training_history.pkl"
+    # Initialize variables
+    model = None
     history = {}
-    if history_path.exists():
-        with open(history_path, "rb") as f:
-            history = pickle.load(f)
+    target_loader = None
+    train_loader = None
 
-    print("\n=== Evaluation Metrics on Target Domain ===")
-    print(f"Dataset: {args.dataset}, Num classes: {args.num_classes}")
-    print(f"Model config: use_gnn={args.use_gnn}, layer={args.layer}, latent_domains={args.latent_domain_num}")
+    try:
+        # Core Args
+        args = get_args()
+        if args_extra.dataset == 'emg':
+            args.num_classes = 6
+        else:
+            args.num_classes = 36
+        args.data_dir = './data/'
+        args.dataset = args_extra.dataset
+        args.output = args_extra.output_dir
+        args.test_envs = [args_extra.test_env]
+        args.use_gnn = False
+        args.layer = 'bn'
+        args.latent_domain_num = 10
 
-    # ✅ Analyze data distributions
-    _ = analyze_distribution(target_loader, "Target Data")
-    _ = analyze_predictions(model, target_loader, "Target Predictions")
+        # Load data
+        train_loader, _, _, target_loader, _, _, _ = get_act_dataloader(args)
 
-    # ✅ Accuracy (on full dataset)
-    acc = compute_accuracy(model, target_loader)
-    print("\nTest Accuracy (OOD):", acc)
+        # Model
+        algorithm_class = alg.get_algorithm_class(args.algorithm)
+        model = algorithm_class(args).cuda()
+        model.eval()
+        
+        # Load trained model weights
+        model_path = Path(args.output) / "model.pth"
+        if model_path.exists():
+            model.load_state_dict(torch.load(model_path), strict=False)
+            print(f"✅ Loaded trained model from {model_path}")
+        else:
+            print("⚠️ Warning: No trained model found. Using random weights")
 
+        # History
+        history_path = Path(args.output) / "training_history.pkl"
+        if history_path.exists():
+            with open(history_path, "rb") as f:
+                history = pickle.load(f)
 
-# ✅ Feature extraction (on limited batches)
-MAX_BATCHES_FOR_FEATURES = 50
-try:
-    # For cluster metrics, use raw features
-    train_feats_raw, train_labels = extract_features_labels(model, limit_batches(train_loader, MAX_BATCHES_FOR_FEATURES), use_bottleneck=False)
-    target_feats_raw, target_labels = extract_features_labels(model, limit_batches(target_loader, MAX_BATCHES_FOR_FEATURES), use_bottleneck=False)
+        print("\n=== Evaluation Metrics on Target Domain ===")
+        print(f"Dataset: {args.dataset}, Num classes: {args.num_classes}")
+        print(f"Model config: use_gnn={args.use_gnn}, layer={args.layer}, latent_domains={args.latent_domain_num}")
 
-    # For H-divergence, use bottleneck features
-    train_feats_bn, _ = extract_features_labels(model, limit_batches(train_loader, MAX_BATCHES_FOR_FEATURES), use_bottleneck=True)
-    target_feats_bn, _ = extract_features_labels(model, limit_batches(target_loader, MAX_BATCHES_FOR_FEATURES), use_bottleneck=True)
+        # Analyze distributions
+        if target_loader:
+            analyze_distribution(target_loader, "Target Data")
+        if model and target_loader:
+            analyze_predictions(model, target_loader, "Target Predictions")
 
-    print(f"\nExtracted {len(train_labels)} train samples and {len(target_labels)} target samples for metrics")
+        # Accuracy
+        if model and target_loader:
+            acc = compute_accuracy(model, target_loader)
+            print("\nTest Accuracy (OOD):", acc)
+        else:
+            print("\n⚠️ Skipping accuracy calculation - model or data loader missing")
+
+        # Feature extraction
+        MAX_BATCHES_FOR_FEATURES = 50
+        if model and train_loader and target_loader:
+            try:
+                train_feats_raw, train_labels = extract_features_labels(model, limit_batches(train_loader, MAX_BATCHES_FOR_FEATURES), use_bottleneck=False)
+                target_feats_raw, target_labels = extract_features_labels(model, limit_batches(target_loader, MAX_BATCHES_FOR_FEATURES), use_bottleneck=False)
+                train_feats_bn, _ = extract_features_labels(model, limit_batches(train_loader, MAX_BATCHES_FOR_FEATURES), use_bottleneck=True)
+                target_feats_bn, _ = extract_features_labels(model, limit_batches(target_loader, MAX_BATCHES_FOR_FEATURES), use_bottleneck=True)
+
+                print(f"\nExtracted {len(train_labels)} train samples and {len(target_labels)} target samples for metrics")
+                
+                # Cluster metrics
+                if len(train_feats_raw) > 0 and len(train_labels) > 0:
+                    sil_score = compute_silhouette(train_feats_raw, train_labels)
+                    print("Silhouette Score:", sil_score)
+                    db_score = compute_davies_bouldin(train_feats_raw, train_labels)
+                    print("Davies-Bouldin Score:", db_score)
+                else:
+                    print("⚠️ Skipping cluster metrics due to insufficient data")
+                
+                # H-divergence
+                if len(train_feats_bn) > 0 and len(target_feats_bn) > 0:
+                    h_div = compute_h_divergence(train_feats_bn, target_feats_bn, model.discriminator)
+                    print("H-divergence:", h_div)
+                else:
+                    print("⚠️ Skipping H-divergence due to insufficient data")
+            except Exception as e:
+                print(f"⚠️ Feature metric computation failed: {str(e)}")
+                traceback.print_exc()
+        else:
+            print("\n⚠️ Skipping feature metrics - model or data loader missing")
+            
+    except Exception as e:
+        print(f"⚠️ Critical error in main execution: {str(e)}")
+        traceback.print_exc()
     
-    # Silhouette Score
-    sil_score = compute_silhouette(train_feats_raw, train_labels)
-    print("Silhouette Score:", sil_score)
-    
-    # Davies-Bouldin Score
-    db_score = compute_davies_bouldin(train_feats_raw, train_labels)
-    print("Davies-Bouldin Score:", db_score)
-    
-    # H-divergence
-    if len(train_feats_bn) > 0 and len(target_feats_bn) > 0:
-        h_div = compute_h_divergence(train_feats_bn, target_feats_bn, model.discriminator)
-        print("H-divergence:", h_div)
-    else:
-        print("⚠️ Skipping H-divergence due to insufficient data")
-except Exception as e:
-    print(f"⚠️ Feature metric computation failed: {e}")
-
-
-
-    # ✅ Plot training curve
+    # Plot training curve (safe even if previous steps failed)
     if history:
         print("\nPlotting training metrics...")
-        plot_metrics({"GNN": history}, save_dir=args.output)
+        plot_metrics({"GNN": history}, save_dir=args.output if 'args' in locals() else args_extra.output_dir)
 
 if __name__ == "__main__":
     main()

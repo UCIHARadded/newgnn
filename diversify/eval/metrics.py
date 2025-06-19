@@ -10,14 +10,10 @@ def extract_features_labels(model, loader):
     model.eval()
     with torch.no_grad():
         for batch in loader:
-            # Handle both 2-item and 3-item returns
-            if len(batch) == 3:
-                data, label, _ = batch
-            elif len(batch) == 2:
-                data, label = batch
-            else:
-                raise ValueError(f"Unexpected number of items in batch: {len(batch)}")
-                
+            # Extract data and labels from any batch size
+            data = batch[0]  # First element is always data
+            label = batch[1]  # Second element is always class label
+            
             data = data.cuda()
             feat = model.featurizer(data)
             features.append(feat.cpu().numpy())
@@ -32,14 +28,10 @@ def compute_accuracy(model, loader):
     total = 0
     with torch.no_grad():
         for batch in loader:
-            # Handle both 2-item and 3-item returns
-            if len(batch) == 3:
-                data, labels, _ = batch
-            elif len(batch) == 2:
-                data, labels = batch
-            else:
-                raise ValueError(f"Unexpected number of items in batch: {len(batch)}")
-                
+            # Extract data and labels from any batch size
+            data = batch[0]  # First element is always data
+            labels = batch[1]  # Second element is always class label
+            
             data, labels = data.cuda(), labels.cuda()
             outputs = model.predict(data)
             _, predicted = torch.max(outputs.data, 1)

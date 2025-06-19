@@ -16,18 +16,19 @@ def extract_features_labels(model, loader):
                 data = batch[0]
                 
                 # Find the label tensor in the batch
+                label_found = False
                 for item in batch:
                     if isinstance(item, torch.Tensor) and (item.dtype == torch.int64 or item.dtype == torch.int32):
                         label = item
+                        label_found = True
                         break
-                else:  # If no label tensor found
+                if not label_found:
                     label = batch[1] if len(batch) > 1 else None
             else:
                 data = batch
                 label = None
                 
             if label is None:
-                print("⚠️ Warning: Could not find labels in batch")
                 continue
                 
             data = data.cuda()
@@ -51,18 +52,19 @@ def compute_accuracy(model, loader):
                 data = batch[0]
                 
                 # Find the label tensor in the batch
+                label_found = False
                 for item in batch:
                     if isinstance(item, torch.Tensor) and (item.dtype == torch.int64 or item.dtype == torch.int32):
                         labels = item
+                        label_found = True
                         break
-                else:  # If no label tensor found
+                if not label_found:
                     labels = batch[1] if len(batch) > 1 else None
             else:
                 data = batch
                 labels = None
                 
             if labels is None:
-                print("⚠️ Warning: Could not find labels in batch")
                 continue
                 
             data, labels = data.cuda(), labels.cuda()
@@ -74,27 +76,40 @@ def compute_accuracy(model, loader):
 
 def compute_silhouette(features, labels):
     if len(features) == 0 or len(labels) == 0:
-        print("⚠️ Warning: No features or labels for silhouette score")
         return 0.0
+    
+    # Check for sufficient classes
+    unique_labels = np.unique(labels)
+    if len(unique_labels) < 2:
+        return 0.0
+    
+    # Limit sample size
     if len(features) > 5000:
         indices = np.random.choice(len(features), 5000, replace=False)
         features = features[indices]
         labels = labels[indices]
+    
     return silhouette_score(features, labels)
 
 def compute_davies_bouldin(features, labels):
     if len(features) == 0 or len(labels) == 0:
-        print("⚠️ Warning: No features or labels for Davies-Bouldin score")
         return 0.0
+    
+    # Check for sufficient classes
+    unique_labels = np.unique(labels)
+    if len(unique_labels) < 2:
+        return 0.0
+    
+    # Limit sample size
     if len(features) > 5000:
         indices = np.random.choice(len(features), 5000, replace=False)
         features = features[indices]
         labels = labels[indices]
+    
     return davies_bouldin_score(features, labels)
 
 def compute_h_divergence(features1, features2, discriminator):
     if len(features1) == 0 or len(features2) == 0:
-        print("⚠️ Warning: Empty features for H-divergence")
         return 0.0
     features1 = torch.tensor(features1).cuda()
     features2 = torch.tensor(features2).cuda()

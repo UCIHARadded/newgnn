@@ -100,9 +100,14 @@ def main():
         model = algorithm_class(args).cuda()
         model.eval()
         
-        # Load trained model weights
+        # ✅ Load trained model weights - UPDATED TO LOAD BEST MODEL
+        best_model_path = Path(args.output) / "best_model.pth"
         model_path = Path(args.output) / "model.pth"
-        if model_path.exists():
+        
+        if best_model_path.exists():
+            model.load_state_dict(torch.load(best_model_path), strict=False)
+            print(f"✅ Loaded BEST trained model from {best_model_path}")
+        elif model_path.exists():
             model.load_state_dict(torch.load(model_path), strict=False)
             print(f"✅ Loaded trained model from {model_path}")
         else:
@@ -170,7 +175,8 @@ def main():
     # Plot training curve (safe even if previous steps failed)
     if history:
         print("\nPlotting training metrics...")
-        plot_metrics({"GNN": history}, save_dir=args.output if 'args' in locals() else args_extra.output_dir)
+        save_dir = args.output if 'args' in locals() else args_extra.output_dir
+        plot_metrics({"GNN": history}, save_dir=save_dir)
 
 if __name__ == "__main__":
     main()

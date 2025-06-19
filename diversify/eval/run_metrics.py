@@ -17,6 +17,15 @@ from eval.metrics import (
     compute_h_divergence, extract_features_labels, plot_metrics
 )
 
+# Helper function to limit batches for feature extraction
+def limit_batches(loader, max_batches):
+    count = 0
+    for batch in loader:
+        yield batch
+        count += 1
+        if count >= max_batches:
+            break
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--output_dir', type=str, required=True)
@@ -70,29 +79,31 @@ def main():
     print(f"Dataset: {args.dataset}, Num classes: {args.num_classes}")
     print(f"Model config: use_gnn={args.use_gnn}, layer={args.layer}, latent_domains={args.latent_domain_num}")
 
-    # ✅ Accuracy
+    # ✅ Accuracy (on full dataset)
     acc = compute_accuracy(model, target_loader)
     print("Test Accuracy (OOD):", acc)
 
-    # ✅ Feature extraction
+    # ✅ Feature extraction (on limited batches)
+    MAX_BATCHES_FOR_FEATURES = 50  # Process only 50 batches for metrics
     try:
-        # Debug: Check label ranges
-        _, sample_labels = next(iter(target_loader))
-        unique_labels = torch.unique(sample_labels)
-        print(f"Unique labels in target: {unique_labels}")
-        print(f"Label range: {unique_labels.min().item()} to {unique_labels.max().item()}")
-        assert unique_labels.max() < args.num_classes, "Labels exceed class dimension!"
-        
-        train_feats, train_labels = extract_features_labels(model, train_loader)
-        target_feats, target_labels = extract_features_labels(model, target_loader)
+        # Extract features from a subset of batches
+        train_feats, train_labels = extract_features_labels(model, limit_batches(train_loader, MAX_BATCHES_FOR_FEATURES))
+        target_feats, target_labels = extract_features_labels(model, limit_batches(target_loader, MAX_BATCHES_FOR_FEATURES))
 
-        print("Silhouette Score:", compute_silhouette(train_feats, train_labels))
-        print("Davies-Bouldin Score:", compute_davies_bouldin(train_feats, train_labels))
-        print("H-divergence:", compute_h_divergence(
-            torch.tensor(train_feats).cuda(),
-            torch.tensor(target_feats).cuda(),
-            model.discriminator
-        ))
+        print(f"Extracted {len(train_labels)} train samples and {len(target_labels)} target samples for metrics")
+        
+        if len(train_feats) > 0 and len(train_labels) > 0:
+            print("Silhouette Score:", compute_silhouette(train_feats, train_labels))
+            print("Davies-Bouldin Score:", compute_davies_bouldin(train_feats, train_labels))
+        else:
+            print("⚠️ Skipping cluster metrics due to insufficient data")
+            
+        if len(train_feats) > 0 and len(target_feats) > 0:
+            print("H-divergence:", compute_h_divergence(
+                train_feats, target_feats, model.discriminator
+            ))
+        else:
+            print("⚠️ Skipping H-divergence due to insufficient data")
     except Exception as e:
         print(f"⚠️ Feature metric computation failed: {e}")
 
